@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>幸运转盘</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 40px 20px;
+            gap: 40px;
+            flex-wrap: wrap;
+        }
+
+        .wheel-container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+        }
+
+        #wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+            transition: transform 0s;
+        }
+
+        /* 指针 */
+        .pointer {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 40px solid #e74c3c;
+            z-index: 10;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+        }
+
+        /* 中心按钮 */
+        .center-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #ff6b6b, #ee5a52);
+            color: white;
+            border: 4px solid white;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 5;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+            transition: all 0.2s;
+        }
+
+        .center-btn:hover {
+            transform: translate(-50%, -50%) scale(1.05);
+        }
+
+        .center-btn:active {
+            transform: translate(-50%, -50%) scale(0.95);
+        }
+
+        .center-btn.stop {
+            background: linear-gradient(145deg, #3498db, #2980b9);
+        }
+
+        /* 控制面板 */
+        .panel {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            width: 360px;
+        }
+
+        .panel h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 20px;
+        }
+
+        .item-list {
+            margin-bottom: 20px;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+
+        .item-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .item-row input {
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .item-row .name-input {
+            flex: 2;
+        }
+
+        .item-row .prob-input {
+            flex: 1;
+        }
+
+        .item-row .del-btn {
+            width: 30px;
+            height: 30px;
+            border: none;
+            background: #e74c3c;
+            color: white;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .btn-add {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-add:hover {
+            background: #219a52;
+        }
+
+        .btn-apply {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-apply:hover {
+            background: #2980b9;
+        }
+
+        .result {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 16px;
+            color: #333;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .result span {
+            color: #e74c3c;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .tip {
+            font-size: 12px;
+            color: #999;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="wheel-container">
+        <div class="pointer"></div>
+        <canvas id="wheel" width="400" height="400"></canvas>
+        <button class="center-btn" id="startBtn">开始</button>
+    </div>
+
+    <div class="panel">
+        <h2>转盘配置</h2>
+        <div class="item-list" id="itemList"></div>
+        
+        <div class="btn-group">
+            <button class="btn btn-add" onclick="addItem()">+ 添加选项</button>
+            <button class="btn btn-apply" onclick="applyConfig()">应用配置</button>
+        </div>
+
+        <div class="result" id="result">
+            点击中间按钮开始抽奖
+        </div>
+        <p class="tip">概率为权重值，数值越大中奖概率越高，系统会自动计算占比</p>
+    </div>
+
+    <script>
+        // 默认配置：内容 + 概率权重
+        let prizes = [
+            { name: '一等奖', prob: 1, color: '#e74c3c' },
+            { name: '二等奖', prob: 3, color: '#f39c12' },
+            { name: '三等奖', prob: 6, color: '#f1c40f' },
+            { name: '谢谢参与', prob: 10, color: '#2ecc71' },
+            { name: '再来一次', prob: 5, color: '#3498db' },
+            { name: '神秘大奖', prob: 2, color: '#9b59b6' }
+        ];
+
+        const canvas = document.getElementById('wheel');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+        const resultEl = document.getElementById('result');
+        const itemList = document.getElementById('itemList');
+
+        let currentAngle = 0;      // 当前旋转角度
+        let isRunning = false;     // 是否正在旋转
+        let speed = 0;             // 当前角速度
+        let targetIndex = -1;      // 目标中奖索引
+        let animationId = null;
+        let isStopping = false;    // 是否处于减速停止阶段
+
+        const colors = ['#e74c3c', '#f39c12', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#1abc9c', '#e67e22'];
+
+        // 初始化
+        function init() {
+            renderItemList();
+            drawWheel();
+        }
+
+        // 渲染配置列表
+        function renderItemList() {
+            itemList.innerHTML = '';
+            prizes.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'item-row';
+                row.innerHTML = `
+                    <input type="text" class="name-input" value="${item.name}" placeholder="奖项名称">
+                    <input type="number" class="prob-input" value="${item.prob}" min="0" step="1" placeholder="概率">
+                    <button class="del-btn" onclick="removeItem(${index})">×</button>
+                `;
+                itemList.appendChild(row);
+            });
+        }
+
+        // 添加选项
+        function addItem() {
+            if (prizes.length >= 12) {
+                alert('最多支持12个选项');
+                return;
+            }
+            prizes.push({
+                name: '新选项',
+                prob: 1,
+                color: colors[prizes.length % colors.length]
+            });
+            renderItemList();
+        }
+
+        // 删除选项
+        function removeItem(index) {
+            if (prizes.length <= 2) {
+                alert('至少保留2个选项');
+                return;
+            }
+            prizes.splice(index, 1);
+            renderItemList();
+        }
+
+        // 应用配置
+        function applyConfig() {
+            if (isRunning) {
+                alert('转盘运行中无法修改');
+                return;
+            }
+            const rows = itemList.querySelectorAll('.item-row');
+            rows.forEach((row, i) => {
+                prizes[i].name = row.querySelector('.name-input').value || '未命名';
+                prizes[i].prob = Math.max(0, Number(row.querySelector('.prob-input').value) || 0);
+                prizes[i].color = colors[i % colors.length];
+            });
+            
+            // 检查总概率是否为0
+            const totalProb = prizes.reduce((sum, p) => sum + p.prob, 0);
+            if (totalProb <= 0) {
+                alert('概率权重总和必须大于0');
+                return;
+            }
+            
+            drawWheel();
+            resultEl.innerHTML = '配置已更新，点击开始抽奖';
+        }
+
+        // 绘制转盘
+        function drawWheel() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = 190;
+            const len = prizes.length;
+            const anglePer = (Math.PI * 2) / len;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < len; i++) {
+                const startAngle = currentAngle + i * anglePer;
+                const endAngle = startAngle + anglePer;
+
+                // 绘制扇形
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                ctx.closePath();
+                ctx.fillStyle = prizes[i].color;
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // 绘制文字
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(startAngle + anglePer / 2);
+                ctx.textAlign = 'right';
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 16px "Microsoft YaHei"';
+                ctx.shadowColor = 'rgba(0,0,0,0.3)';
+                ctx.shadowBlur = 2;
+                ctx.fillText(prizes[i].name, radius - 20, 6);
+                ctx.restore();
+            }
+
+            // 外圈装饰
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+        }
+
+        // 根据概率权重计算中奖索引
+        function getPrizeIndex() {
+            const total = prizes.reduce((sum, p) => sum + p.prob, 0);
+            let random = Math.random() * total;
+            
+            for (let i = 0; i < prizes.length; i++) {
+                random -= prizes[i].prob;
+                if (random <= 0) {
+                    return i;
+                }
+            }
+            return prizes.length - 1;
+        }
+
+        // 开始旋转
+        function startSpin() {
+            if (isRunning) return;
+            
+            isRunning = true;
+            isStopping = false;
+            speed = 0;
+            targetIndex = -1;
+            startBtn.textContent = '停止';
+            startBtn.classList.add('stop');
+            resultEl.innerHTML = '转盘转动中...';
+
+            // 加速阶段
+            function accelerate() {
+                speed += 0.008;
+                if (speed >= 0.25) {
+                    speed = 0.25;
+                    // 匀速阶段
+                    animationId = requestAnimationFrame(constantSpeed);
+                } else {
+                    currentAngle += speed;
+                    drawWheel();
+                    animationId = requestAnimationFrame(accelerate);
+                }
+            }
+
+            // 匀速阶段
+            function constantSpeed() {
+                if (isStopping) {
+                    // 开始减速，计算目标位置
+                    targetIndex = getPrizeIndex();
+                    const len = prizes.length;
+                    const anglePer = (Math.PI * 2) / len;
+                    // 指针在顶部（-90度），计算目标角度
+                    const targetAngle = -Math.PI / 2 - (targetIndex * anglePer + anglePer / 2);
+                    // 加上多转几圈
+                    const extraSpins = 3 * Math.PI * 2;
+                    const finalAngle = targetAngle + extraSpins;
+                    
+                    // 规范化当前角度
+                    let normalized = currentAngle % (Math.PI * 2);
+                    let distance = finalAngle - normalized;
+                    // 确保正向旋转
+                    while (distance < 0) distance += Math.PI * 2;
+                    
+                    decelerate(distance, speed);
+                    return;
+                }
+                
+                currentAngle += speed;
+                drawWheel();
+                animationId = requestAnimationFrame(constantSpeed);
+            }
+
+            // 减速阶段
+            function decelerate(remainDistance, currentSpeed) {
+                if (remainDistance <= 0 || currentSpeed <= 0.002) {
+                    // 停止
+                    cancelAnimationFrame(animationId);
+                    isRunning = false;
+                    startBtn.textContent = '开始';
+                    startBtn.classList.remove('stop');
+                    resultEl.innerHTML = `恭喜获得：<span>${prizes[targetIndex].name}</span>`;
+                    return;
+                }
+
+                // 匀减速
+                const deceleration = 0.0015;
+                const newSpeed = Math.max(0, currentSpeed - deceleration);
+                const step = (currentSpeed + newSpeed) / 2;
+                
+                currentAngle += step;
+                drawWheel();
+                
+                animationId = requestAnimationFrame(() => {
+                    decelerate(remainDistance - step, newSpeed);
+                });
+            }
+
+            animationId = requestAnimationFrame(accelerate);
+        }
+
+        // 停止旋转
+        function stopSpin() {
+            if (!isRunning || isStopping) return;
+            isStopping = true;
+        }
+
+        // 按钮点击事件
+        startBtn.addEventListener('click', () => {
+            if (!isRunning) {
+                startSpin();
+            } else {
+                stopSpin();
+            }
+        });
+
+        // 初始化
+        init();
+    </script>
+</body>
+</html>
